@@ -49,7 +49,7 @@ python font_unifier.py
 
 ### 操作步骤
 1. 点击 "Browse..." 按钮选择要处理的 Office 文件
-2. 在 "Target Font" 输入框中输入目标字体名称（默认为 "Meiryo UI"）
+2. 在 "Target Font" 下拉框中选择目标字体（默认为 "Meiryo UI"）
 3. 点击 "Start Processing" 按钮开始处理
 4. 处理完成后，查看状态信息和保存路径
 
@@ -93,6 +93,7 @@ ChangeFont/
   - python-docx（Word 文件处理）
   - openpyxl（Excel 文件处理）
   - python-pptx（PowerPoint 文件处理）
+- **字体选择**：下拉框提供16种预定义字体选项
 
 ## 许可证
 
@@ -109,3 +110,8 @@ ChangeFont/
 - 支持 Word、Excel、PowerPoint 文件的字体统一
 - 提供图形用户界面
 - 实现基本的错误处理和状态反馈
+
+### v1.1.0
+- 字体选择方式改为下拉框，提供16种预定义字体选项
+- 默认字体设置为 Meiryo UI
+- 改进用户体验，减少手动输入错误

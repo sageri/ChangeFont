@@ -2,7 +2,7 @@ import sys
 import os
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QFrame
+    QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QFrame, QComboBox
 )
 from PyQt6.QtCore import Qt
 from docx import Document
@@ -45,15 +45,58 @@ def change_excel_font(path, new_font_name):
     return workbook
 
 def change_ppt_font(path, new_font_name):
-    """Changes the font for all text in a .pptx file."""
+    """Changes the font for all text in a .pptx file, including tables, charts, and groups."""
     prs = Presentation(path)
-    for slide in prs.slides:
-        for shape in slide.shapes:
-            if not shape.has_text_frame:
-                continue
+
+    def process_shape_text(shape):
+        """Recursively processes text in a shape, including nested groups."""
+        if hasattr(shape, 'has_text_frame') and shape.has_text_frame:
+            # 处理普通文本框
             for paragraph in shape.text_frame.paragraphs:
                 for run in paragraph.runs:
                     run.font.name = new_font_name
+        if hasattr(shape, 'has_table') and shape.has_table:
+            # 处理表格文本
+            table = shape.table
+            for row in table.rows:
+                for cell in row.cells:
+                    if cell.text_frame:
+                        for paragraph in cell.text_frame.paragraphs:
+                            for run in paragraph.runs:
+                                run.font.name = new_font_name
+        if hasattr(shape, 'has_chart') and shape.has_chart:
+            # 处理图表文本
+            chart = shape.chart
+            if chart.has_title:
+                for paragraph in chart.chart_title.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.name = new_font_name
+            # 处理轴标签
+            if hasattr(chart, 'x_axis') and chart.x_axis.has_title:
+                for paragraph in chart.x_axis.axis_title.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.name = new_font_name
+            if hasattr(chart, 'y_axis') and chart.y_axis.has_title:
+                for paragraph in chart.y_axis.axis_title.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.name = new_font_name
+            # 处理数据标签（如果有）
+            for series in chart.series:
+                if series.has_data_labels:
+                    for data_label in series.data_labels:
+                        if data_label.text_frame:
+                            for paragraph in data_label.text_frame.paragraphs:
+                                for run in paragraph.runs:
+                                    run.font.name = new_font_name
+        if hasattr(shape, 'has_group') and shape.has_group:
+            # 递归处理组形状
+            for sub_shape in shape.shapes:
+                process_shape_text(sub_shape)
+
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            process_shape_text(shape)
+
     return prs
 
 # --- GUI Application ---
@@ -102,7 +145,13 @@ class FontUnifierApp(QMainWindow):
         font_label.setFixedWidth(80)
         font_layout.addWidget(font_label)
 
-        self.font_entry = QLineEdit(self.font_name)
+        self.font_entry = QComboBox()
+        self.font_entry.addItems([
+            "Arial", "Calibri", "Times New Roman", "Verdana", "Tahoma", "Georgia",
+            "Comic Sans MS", "Impact", "Courier New", "Lucida Sans Unicode",
+            "Meiryo UI", "MS Gothic", "MS Mincho", "Meiryo", "Yu Gothic", "Yu Mincho"
+        ])
+        self.font_entry.setCurrentText(self.font_name)
         font_layout.addWidget(self.font_entry)
 
         layout.addWidget(font_frame)
@@ -143,7 +192,7 @@ class FontUnifierApp(QMainWindow):
 
     def process_file(self):
         path = self.file_path
-        font = self.font_entry.text()
+        font = self.font_entry.currentText()
 
         if not path:
             QMessageBox.critical(self, "Error", "Please select a file first.")

@@ -27,9 +27,10 @@ Font Unifier 是一个基于 Python 的桌面应用程序，用于批量统一 M
 - 显示选定文件的完整路径
 
 ### 2.2 字体设置功能
-- 用户可以输入目标字体名称
+- 用户可以通过下拉框选择目标字体
+- 提供16种常用Office字体选项
 - 默认字体设置为 "Meiryo UI"
-- 支持自定义字体名称输入
+- 支持预定义字体列表选择
 
 ### 2.3 文件处理功能
 - **Word 文件处理**：
@@ -75,7 +76,7 @@ Font Unifier 是一个基于 Python 的桌面应用程序，用于批量统一 M
 
 ### 4.1 技术栈
 - **编程语言**：Python 3.12+
-- **GUI 框架**：Tkinter
+- **GUI 框架**：PyQt6
 - **Office 文件处理**：
   - Word：python-docx
   - Excel：openpyxl
