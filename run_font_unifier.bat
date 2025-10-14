@@ -1,4 +1,4 @@
 @echo off
-call venv\Scripts\activate
-python font_unifier.py
+call .venv\Scripts\activate
+python src/font_unifier.py
 pause
