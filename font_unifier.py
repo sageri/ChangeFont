@@ -1,6 +1,10 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
+import sys
 import os
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QFrame
+)
+from PyQt6.QtCore import Qt
 from docx import Document
 from docx.shared import Pt
 from openpyxl import load_workbook
@@ -54,70 +58,103 @@ def change_ppt_font(path, new_font_name):
 
 # --- GUI Application ---
 
-class FontUnifierApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Font Unifier")
-        self.root.geometry("500x250")
+class FontUnifierApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Font Unifier")
+        self.setGeometry(100, 100, 500, 250)
 
-        self.file_path = tk.StringVar()
-        self.font_name = tk.StringVar(value="Meiryo UI")
+        self.file_path = ""
+        self.font_name = "Meiryo UI"
+
+        # Central widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+
+        # Main layout
+        layout = QVBoxLayout(central_widget)
 
         # File Selection Frame
-        file_frame = tk.Frame(self.root, pady=10)
-        file_frame.pack(fill="x", padx=10)
-        
-        tk.Label(file_frame, text="File:", width=10).pack(side="left")
-        self.file_entry = tk.Entry(file_frame, textvariable=self.file_path, state="readonly")
-        self.file_entry.pack(side="left", expand=True, fill="x")
-        tk.Button(file_frame, text="Browse...", command=self.browse_file).pack(side="right", padx=5)
+        file_frame = QFrame()
+        file_layout = QHBoxLayout(file_frame)
+        file_layout.setContentsMargins(10, 10, 10, 10)
+
+        file_label = QLabel("File:")
+        file_label.setFixedWidth(60)
+        file_layout.addWidget(file_label)
+
+        self.file_entry = QLineEdit()
+        self.file_entry.setReadOnly(True)
+        file_layout.addWidget(self.file_entry)
+
+        browse_button = QPushButton("Browse...")
+        browse_button.clicked.connect(self.browse_file)
+        file_layout.addWidget(browse_button)
+
+        layout.addWidget(file_frame)
 
         # Font Selection Frame
-        font_frame = tk.Frame(self.root, pady=10)
-        font_frame.pack(fill="x", padx=10)
-        
-        tk.Label(font_frame, text="Target Font:", width=10).pack(side="left")
-        self.font_entry = tk.Entry(font_frame, textvariable=self.font_name)
-        self.font_entry.pack(side="left", expand=True, fill="x")
+        font_frame = QFrame()
+        font_layout = QHBoxLayout(font_frame)
+        font_layout.setContentsMargins(10, 10, 10, 10)
+
+        font_label = QLabel("Target Font:")
+        font_label.setFixedWidth(80)
+        font_layout.addWidget(font_label)
+
+        self.font_entry = QLineEdit(self.font_name)
+        font_layout.addWidget(self.font_entry)
+
+        layout.addWidget(font_frame)
 
         # Action Frame
-        action_frame = tk.Frame(self.root, pady=20)
-        action_frame.pack()
-        
-        self.start_button = tk.Button(action_frame, text="Start Processing", command=self.process_file, width=20, height=2)
-        self.start_button.pack()
-        
+        action_frame = QFrame()
+        action_layout = QVBoxLayout(action_frame)
+        action_layout.setContentsMargins(10, 20, 10, 20)
+
+        self.start_button = QPushButton("Start Processing")
+        self.start_button.setFixedSize(150, 40)
+        self.start_button.clicked.connect(self.process_file)
+        action_layout.addWidget(self.start_button, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        layout.addWidget(action_frame)
+
         # Status Label
-        self.status_label = tk.Label(self.root, text="", fg="green")
-        self.status_label.pack(pady=5)
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("color: green;")
+        layout.addWidget(self.status_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def browse_file(self):
-        path = filedialog.askopenfilename(
-            filetypes=[
-                ("Office Files", "*.docx *.xlsx *.pptx"),
-                ("Word Documents", "*.docx"),
-                ("Excel Workbooks", "*.xlsx"),
-                ("PowerPoint Presentations", "*.pptx"),
-                ("All files", "*.*")
-            ]
-        )
-        if path:
-            self.file_path.set(path)
-            self.status_label.config(text="")
+        file_dialog = QFileDialog()
+        file_dialog.setNameFilters([
+            "Office Files (*.docx *.xlsx *.pptx)",
+            "Word Documents (*.docx)",
+            "Excel Workbooks (*.xlsx)",
+            "PowerPoint Presentations (*.pptx)",
+            "All files (*.*)"
+        ])
+        if file_dialog.exec():
+            selected_files = file_dialog.selectedFiles()
+            if selected_files:
+                self.file_path = selected_files[0]
+                self.file_entry.setText(self.file_path)
+                self.status_label.setText("")
+                self.status_label.setStyleSheet("color: green;")
 
     def process_file(self):
-        path = self.file_path.get()
-        font = self.font_name.get()
+        path = self.file_path
+        font = self.font_entry.text()
 
         if not path:
-            messagebox.showerror("Error", "Please select a file first.")
+            QMessageBox.critical(self, "Error", "Please select a file first.")
             return
         if not font:
-            messagebox.showerror("Error", "Please enter a target font name.")
+            QMessageBox.critical(self, "Error", "Please enter a target font name.")
             return
 
-        self.status_label.config(text="Processing...", fg="blue")
-        self.root.update_idletasks()
+        self.status_label.setText("Processing...")
+        self.status_label.setStyleSheet("color: blue;")
+        QApplication.processEvents()
 
         try:
             file_dir, file_name = os.path.split(path)
@@ -134,19 +171,23 @@ class FontUnifierApp:
                 modified_prs = change_ppt_font(path, font)
                 modified_prs.save(output_path)
             else:
-                messagebox.showerror("Error", f"Unsupported file type: {ext}")
-                self.status_label.config(text="", fg="red")
+                QMessageBox.critical(self, "Error", f"Unsupported file type: {ext}")
+                self.status_label.setText("")
+                self.status_label.setStyleSheet("color: red;")
                 return
-            
-            self.status_label.config(text=f"Success! Saved to {output_path}", fg="green")
-            messagebox.showinfo("Success", "File processed successfully and saved as: " + output_path)
+
+            self.status_label.setText(f"Success! Saved to {output_path}")
+            self.status_label.setStyleSheet("color: green;")
+            QMessageBox.information(self, "Success", "File processed successfully and saved as: " + output_path)
 
         except Exception as e:
-            self.status_label.config(text="An error occurred.", fg="red")
-            messagebox.showerror("Error", "An error occurred during processing: " + str(e))
+            self.status_label.setText("An error occurred.")
+            self.status_label.setStyleSheet("color: red;")
+            QMessageBox.critical(self, "Error", "An error occurred during processing: " + str(e))
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = FontUnifierApp(root)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    window = FontUnifierApp()
+    window.show()
+    sys.exit(app.exec())

@@ -20,7 +20,7 @@ Font Unifier 是一个基于 Python 的桌面应用程序，用于批量统一 M
 
 ### 依赖包安装
 ```bash
-pip install python-docx openpyxl python-pptx
+pip install PyQt6 python-docx openpyxl python-pptx
 ```
 
 ### 运行环境设置
@@ -88,7 +88,7 @@ ChangeFont/
 ## 开发信息
 
 - **开发语言**：Python 3.12+
-- **GUI 框架**：Tkinter
+- **GUI 框架**：PyQt6
 - **Office 处理库**：
   - python-docx（Word 文件处理）
   - openpyxl（Excel 文件处理）
