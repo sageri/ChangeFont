@@ -18,9 +18,7 @@ from lxml import etree
 
 def _set_docx_run_font(run, font_name):
     """Word: set latin + eastAsia + complex-script fonts on a run."""
-    run.font.name = font_name
-    rpr = run._element.get_or_add_rPr()
-    rfonts = rpr.get_or_add_rFonts()
+    rfonts = run._element.get_or_add_rPr().get_or_add_rFonts()
     rfonts.set(docx_qn('w:ascii'), font_name)
     rfonts.set(docx_qn('w:hAnsi'), font_name)
     rfonts.set(docx_qn('w:eastAsia'), font_name)
@@ -47,32 +45,31 @@ def _set_pptx_text_frame_fonts(text_frame, font_name):
 
 # --- Core Logic for Font Changing ---
 
+def _set_docx_font(paragraphs, font_name):
+    """Apply the docx font helper to every run across the given paragraphs."""
+    for para in paragraphs:
+        for run in para.runs:
+            _set_docx_run_font(run, font_name)
+
+
 def change_word_font(path, new_font_name):
     """Changes the font for all text in a .docx file."""
     doc = Document(path)
-    for para in doc.paragraphs:
-        for run in para.runs:
-            _set_docx_run_font(run, new_font_name)
-
+    _set_docx_font(doc.paragraphs, new_font_name)
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                for para in cell.paragraphs:
-                    for run in para.runs:
-                        _set_docx_run_font(run, new_font_name)
-
+                _set_docx_font(cell.paragraphs, new_font_name)
     return doc
 
 
 def change_excel_font(path, new_font_name):
     """Changes the font for all cells in a .xlsx file, preserving other style."""
     workbook = load_workbook(path)
-    for sheetname in workbook.sheetnames:
-        worksheet = workbook[sheetname]
+    for worksheet in workbook.worksheets:
         for row in worksheet.iter_rows():
             for cell in row:
                 cell.font = cell.font.copy(name=new_font_name)
-
     return workbook
 
 
@@ -122,8 +119,15 @@ def change_ppt_font(path, new_font_name):
     for slide in prs.slides:
         for shape in slide.shapes:
             process_shape_text(shape)
-
     return prs
+
+
+# Extension -> handler (case-insensitive dispatch in process_office_file)
+_FONT_CHANGERS = {
+    ".docx": change_word_font,
+    ".xlsx": change_excel_font,
+    ".pptx": change_ppt_font,
+}
 
 
 def process_office_file(path, font_name):
@@ -136,16 +140,10 @@ def process_office_file(path, font_name):
     name, ext = os.path.splitext(file_name)
     output_path = os.path.join(file_dir, f"{name}_modified{ext}")
 
-    ext_lower = ext.lower()
-    if ext_lower == ".docx":
-        change_word_font(path, font_name).save(output_path)
-    elif ext_lower == ".xlsx":
-        change_excel_font(path, font_name).save(output_path)
-    elif ext_lower == ".pptx":
-        change_ppt_font(path, font_name).save(output_path)
-    else:
+    changer = _FONT_CHANGERS.get(ext.lower())
+    if changer is None:
         raise ValueError(f"Unsupported file type: {ext}")
-
+    changer(path, font_name).save(output_path)
     return output_path
 
 
@@ -246,6 +244,10 @@ class FontUnifierApp(QMainWindow):
         layout.addWidget(self.status_label,
                          alignment=Qt.AlignmentFlag.AlignCenter)
 
+    def _set_status(self, text, color):
+        self.status_label.setText(text)
+        self.status_label.setStyleSheet(f"color: {color};")
+
     def browse_file(self):
         file_dialog = QFileDialog(self)
         file_dialog.setNameFilters([
@@ -260,8 +262,7 @@ class FontUnifierApp(QMainWindow):
             if selected_files:
                 self.file_path = selected_files[0]
                 self.file_entry.setText(self.file_path)
-                self.status_label.setText("")
-                self.status_label.setStyleSheet("color: green;")
+                self._set_status("", "green")
 
     def process_file(self):
         path = self.file_path
@@ -275,8 +276,7 @@ class FontUnifierApp(QMainWindow):
                                  "Please enter a target font name.")
             return
 
-        self.status_label.setText("Processing...")
-        self.status_label.setStyleSheet("color: blue;")
+        self._set_status("Processing...", "blue")
         self.start_button.setEnabled(False)
 
         self._worker = FontProcessingWorker(path, font)
@@ -286,16 +286,14 @@ class FontUnifierApp(QMainWindow):
 
     def _on_processing_finished(self, output_path):
         self.start_button.setEnabled(True)
-        self.status_label.setText(f"Success! Saved to {output_path}")
-        self.status_label.setStyleSheet("color: green;")
+        self._set_status(f"Success! Saved to {output_path}", "green")
         QMessageBox.information(
             self, "Success",
             "File processed successfully and saved as: " + output_path)
 
     def _on_processing_error(self, message):
         self.start_button.setEnabled(True)
-        self.status_label.setText("An error occurred.")
-        self.status_label.setStyleSheet("color: red;")
+        self._set_status("An error occurred.", "red")
         QMessageBox.critical(
             self, "Error",
             "An error occurred during processing: " + message)
