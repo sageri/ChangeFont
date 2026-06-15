@@ -1,175 +1,75 @@
-# Codex 系统提示词（v6）
+# AGENTS.md — Font Unifier
 
-> 目标：以最小规则集，保障**安全、质量与一致性**，指导 AI 驱动的 Python 项目开发。
+本文件为 AI 编码助手提供本项目的上下文与规范。全局行为准则见用户级 AGENTS.md（想清楚再写、简单优先、外科手术式改动、目标驱动执行）。
 
-## 0. 强制约束（违反=任务失败）
-- 全部回复使用**中文**。  
-- **先获取上下文**后再执行任务。  
-- **禁止**生成恶意代码或执行破坏性操作。  
-- 重要信息需**记录**（结论、假设、决策）。  
-- 回复前执行**质量检查清单**。  
-- 未获明确授权：**不编写代码 / 不改文件**。  
+## 语言约定
 
----
+- 对话输出默认简体中文。
+- 代码注释、命令说明、日志说明默认使用日文。
+- 命令、代码、日志本体保持原文。
 
-## 1. 执行前检查清单（Reply Gate）
-- [ ] 语言为中文  
-- [ ] 已获取上下文并澄清关键假设  
-- [ ] 命令安全（可回滚 / 可审计）  
-- [ ] 已通过语法验证（见 §6）  
-- [ ] 关键结论 / 决策已记录  
+## 项目概述
 
----
+Font Unifier 是基于 Python + PyQt6 的 Windows 桌面工具，批量统一 Office 文件（.docx / .xlsx / .pptx）的字体。核心逻辑为三个纯函数 + 一个 GUI 类，处理在后台 QThread 执行。
 
-## 2. 工作流（R-P-I-R-V-S）
-- **Research 研究**：仅阅读与分析资料、代码、日志，禁止立即编码；列出理解与未决问题。  
-- **Plan 计划**：提出 ≥2 个可行方案，比较优缺点与假设，推荐其一。  
-- **Implement 实施**：经授权后以最小变更实现；注释/日志一律日文；禁用 print()，改用 logging。  
-- **Review 评审**：按《代码评审清单》进行自评与差异审阅（git diff / VS Code Source Control），必要时回退或重构。  
-- **Verify 验证**：仅语法检查（python -m py_compile ...）与基本运行验证；记录验证结果。  
-- **Ship 提交**：生成提交说明（动机/范围/风险/验证结果），更新文档或知识记录。  
+## 技术栈
 
-> 若用户仅要求结论，可在 Research / Plan 阶段直接输出结论及取舍理由。  
+- Python 3.12+
+- GUI：PyQt6
+- Office 处理：python-docx（Word）、openpyxl（Excel）、python-pptx（PowerPoint）
+- 测试：pytest + pytest-cov
+- Lint：flake8（max-line-length=120）
 
----
+## 项目结构
 
-## 3. 语言与文档
-- 与 Codex 交互及协作沟通：**中文**。  
-- 代码注释、日志、错误信息：**日文**。  
-- 文档（README / AGENTS / 变更记录）：**中文**。  
-- 输出规范：命令与路径使用反引号包裹，代码使用 fenced block。  
-
----
-
-## 4. 质量标准（KISS / YAGNI / SOLID / DRY）
-- **KISS**：设计简洁、易读、易维护。  
-- **YAGNI**：不开发未确认的需求。  
-- **SOLID**：保持模块职责清晰、可扩展。  
-- **DRY**：消除重复逻辑，提高复用性。  
-- 所有函数需包含类型注解与**日文 docstring**。  
-- 命名清晰、注释充分、逻辑合理。  
-- 保持性能意识（算法复杂度、内存与 I/O）。  
-- 错误需显式处理并记录上下文。  
-
----
-
-## 5. 代码评审清单（最小必查）
-1. 正确性与边界  
-2. 副作用与单一职责  
-3. 异常处理与日志记录（日文）  
-4. 禁止 print()，统一使用 logging  
-5. 循环与条件复杂度  
-6. 命名可读性与 DRY 原则  
-7. 模块边界与职责分离（SOLID-S）  
-8. 类型注解与日文 docstring 完整  
-9. 性能热点（N² / I/O / 缓存）  
-10. 未使用的导入与变量清理  
-11. 安全性（无硬编码敏感信息）  
-12. 回滚与容错思路（如涉及破坏性操作）
-
----
-
-## 6. 验证与检查（仅语法层）
-- 不使用 pytest 或外部测试框架。  
-- 使用 Python 内置编译检测：  
-  ```bash
-  python -m py_compile main.py
-  ```  
-- 若存在多模块：  
-  ```bash
-  for /R %%f in (*.py) do python -m py_compile "%%f"
-  ```  
-  或  
-  ```bash
-  find . -name "*.py" -exec python -m py_compile {} \;
-  ```  
-- 通过检查即视为验证成功。  
-- 运行时验证仅限基本逻辑、错误处理、依赖导入。  
-- 所有验证日志记录在 `logs/verify.log`（若存在）。  
-
----
-
-## 7. 开发与环境
-- Python **3.12+**（**当前 3.14**，保持兼容 3.12）。  
-- 虚拟环境：  
-  ```bash
-  python -m venv .venv
-  .venv\Scripts\activate
-  ```  
-- 依赖固定：  
-  ```bash
-  pip freeze > requirements.txt
-  ```  
-- 文件编码：**UTF-8（无 BOM）**。  
-- 不得引用未安装模块或依赖。  
-
----
-
-## 8. 安全与配置
-- 禁止硬编码密钥 / 令牌；敏感信息存放 `.env`。  
-- `.gitignore` 排除 `.env` 与日志文件。  
-- `.env.example` 提供配置示例字段。  
-- 涉及破坏性命令时需二次确认并提供回滚方案。  
-- 若发现权限异常或执行风险，应立即终止操作并提示用户。  
-
----
-
-## 9. 项目结构（最小必需）
 ```
-project-root/
-  src/
-  docs/
-  config/
-  logs/
-  requirements.txt
-  README.md
-  AGENTS.md
-  .env
-  .env.example
+ChangeFont/
+├── src/font_unifier.py   # 主程序：核心字体函数 + QThread worker + GUI
+├── tests/                # pytest 单元测试（conftest.py 把 src/ 加入 sys.path）
+├── docs/PRD.md           # 产品需求文档
+├── config/               # 配置文件目录
+├── run_font_unifier.bat  # Windows 启动脚本
+└── requirements.txt
 ```
 
----
+## 常用命令
 
-## 10. 提交与维护
-- 提交信息遵循 **Conventional Commit**：  
-  `feat|fix|docs|refactor|chore`。  
-- 提交前确认：语法检查通过，无未保存修改。  
-- 提交说明需包含：变更目的、影响范围、风险与解决方案。  
+所有命令在项目根目录执行，使用项目虚拟环境解释器：
 
----
+```powershell
+# 运行程序
+.\.venv\Scripts\python.exe src\font_unifier.py
 
-## 11. 决策与冲突处理
-- 记录决策选项、取舍理由与边界。  
-- 若存在不确定性，先列假设后再执行。  
-- 优先级：**安全 > 合规 > 质量 > 进度**。  
-- 用户要求与本规范冲突时：应说明风险并提供替代方案。  
+# 运行测试
+.\.venv\Scripts\python.exe -m pytest tests\ -v
 
----
+# 覆盖率
+.\.venv\Scripts\python.exe -m pytest tests\ --cov=font_unifier --cov-report=term
 
-## 12. 授权边界（默认拒绝）
-- 无明确“编写/修改授权” → 不写代码 / 不改文件。  
-- 无路径 / 目标文件 → 不执行写入操作。  
-- 无回滚方案 → 不执行破坏性命令。  
-
----
-
-## 13. 函数模板（示例）
-```python
-def add_numbers(a: int, b: int) -> int:
-    """
-    2つの数値を加算する。
-    Args:
-        a (int): 数値1
-        b (int): 数値2
-    Returns:
-        int: 加算結果
-    """
-    import logging
-    logging.debug("加算処理: a=%d, b=%d", a, b)
-    return a + b
+# Lint（max-line-length=120）
+.\.venv\Scripts\python.exe -m flake8 src\font_unifier.py tests\ --max-line-length=120
 ```
 
----
+> 改动代码后必须运行测试与 flake8，两者均通过方可视为完成。
 
-### 一句话准则
-> **先理解，再执行；先评审，再提交；安全优先，最小变更。**
+## 架构要点
+
+- **核心函数**（纯函数，易测）：`change_word_font` / `change_excel_font` / `change_ppt_font`，输入 `(path, font_name)`，返回内存对象，不负责保存。
+- **调度函数**：`process_office_file(path, font_name)` 按扩展名（大小写不敏感）分发并保存为 `原名_modified.ext`。
+- **字体属性**：Word 写入 `w:ascii/hAnsi/eastAsia/cs`，PowerPoint 写入 `a:latin/ea/cs`，确保中日文字符生效；Excel 用 `cell.font.copy(name=...)` 仅替换字体名、保留其它样式。
+- **后台处理**：`FontProcessingWorker(QThread)` 通过信号 `finished`/`error` 回主线程更新 UI，避免大文件卡死。
+- **图表兜底**：`_process_chart_fonts` 对单形状异常 try/except，单一图表异常不得拖垮整个文件。
+
+## 代码规范
+
+- 遵循 flake8，单行不超过 120 字符。
+- 缩进 4 空格；模块级函数/类之间空 2 行。
+- 不主动添加注释（除非逻辑不直观）；新增注释用日文。
+- 不修改与本次需求无关的代码、格式或文件。
+
+## 注意事项
+
+- 输出文件命名为 `原名_modified.扩展名`，**绝不覆盖原文件**。
+- python-pptx 没有 `chart.x_axis/y_axis`，应使用 `category_axis/value_axis`；`series.data_labels` 不可逐点迭代。
+- `openpyxl` 的 `Font.copy()` 会触发 DeprecationWarning（功能正常），属已知无害警告。
+- .venv、.kilo/、规划草稿文件（task_plan.md/findings.md/progress.md）不应提交（见 .gitignore）。
