@@ -26,12 +26,12 @@ pip install PyQt6 python-docx openpyxl python-pptx
 ### 运行环境设置
 1. 创建虚拟环境（推荐）：
 ```bash
-python -m venv venv
+python -m venv .venv
 ```
 
 2. 激活虚拟环境：
 ```bash
-venv\Scripts\activate
+.venv\Scripts\activate
 ```
 
 3. 安装依赖：
@@ -44,7 +44,7 @@ pip install -r requirements.txt
 ### 启动应用程序
 双击运行 `run_font_unifier.bat` 文件，或在命令行中执行：
 ```bash
-python font_unifier.py
+python src/font_unifier.py
 ```
 
 ### 操作步骤
@@ -75,14 +75,17 @@ python font_unifier.py
 
 ```
 ChangeFont/
-├── font_unifier.py          # 主程序文件
+├── src/
+│   └── font_unifier.py      # 主程序文件
+├── tests/                   # 单元测试（pytest）
+├── docs/
+│   └── PRD.md               # 产品需求文档
+├── config/                  # 配置文件目录
 ├── run_font_unifier.bat     # Windows 启动脚本
-├── PRD.md                   # 产品需求文档
 ├── README.md                # 项目说明文档
-├── AGENTS.md                # 开发规范文档
 ├── requirements.txt         # Python 依赖包列表
 ├── .gitignore               # Git 忽略文件配置
-└── venv/                    # 虚拟环境目录（运行时创建）
+└── .venv/                   # 虚拟环境目录（运行时创建）
 ```
 
 ## 开发信息
@@ -115,3 +118,11 @@ ChangeFont/
 - 字体选择方式改为下拉框，提供16种预定义字体选项
 - 默认字体设置为 Meiryo UI
 - 改进用户体验，减少手动输入错误
+
+### v1.2.0
+- 修复中日文字体不生效问题（正确写入 eastAsia/ea 字体属性）
+- 修复 Excel 处理覆盖原有字号、粗体、颜色的问题（改为仅替换字体名）
+- 修复 PowerPoint 图表分支崩溃及轴 API 误用问题
+- 支持文件扩展名大小写（如 `.PPTX`）
+- 字体处理迁移到后台线程（QThread），解决大文件界面卡死
+- 新增单元测试（pytest）

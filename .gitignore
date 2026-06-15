@@ -222,5 +222,11 @@ __marimo__/
 # OS specific files
 .DS_Store
 Thumbs.db
-=======
->>>>>>> 5450890627ac04824e846ab5e9eeeae74f38a2ab
+
+# AI tooling local config
+.kilo/
+
+# Planning scratch files (planning-with-files)
+task_plan.md
+findings.md
+progress.md

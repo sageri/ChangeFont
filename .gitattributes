@@ -1,0 +1,46 @@
+# Unix Shell/Python/JS 等代码强制 LF 换行
+*.sh     text eol=lf
+*.py     text eol=lf
+*.js     text eol=lf
+*.ts     text eol=lf
+*.json   text eol=lf
+*.md     text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.txt    text eol=lf
+*.src    text eol=lf
+*.env    text eol=lf
+*.log    text eol=lf
+
+# Windows 批处理/脚本强制 CRLF
+*.bat    text eol=crlf
+*.ps1    text eol=crlf
+
+# 图片、压缩包等二进制文件
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.svg    binary
+*.ico    binary
+*.pdf    binary
+*.zip    binary
+*.gz     binary
+*.exe    binary
+
+# 强制文本归类（适用于忽略编辑器/系统自动识别错误）
+*.c      text
+*.cpp    text
+*.h      text
+*.hpp    text
+*.css    text
+*.scss   text
+*.html   text
+
+# 锁文件合并策略（防止冲突，可根据需要选择）
+package-lock.json merge=ours
+yarn.lock         merge=ours
+
+# 忽略视频等大文件的 diff
+*.mp4    diff=none
+*.avi    diff=none
