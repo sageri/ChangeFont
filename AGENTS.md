@@ -77,4 +77,5 @@ ChangeFont/
 - 输出文件命名为 `原名_modified.扩展名`，**绝不覆盖原文件**。
 - python-pptx 没有 `chart.x_axis/y_axis`，应使用 `category_axis/value_axis`；`series.data_labels` 不可逐点迭代。
 - 验证字体是否真生效，不能只看 openpyxl/python-docx 的再読込，必须直接检查 `xl/styles.xml`、`word/document.xml`、`xl/theme/theme1.xml`（Excel 的 `<scheme>` 与 Word 的 `asciiTheme` 等主题引用是常见陷阱）。
+- **已知覆盖边界**：Word 文本框（`<w:txbxContent>` 绘图形状）不处理；Excel 图表/形状/页眉页脚字体不处理（这些不在 `workbook._fonts` 内，定义在各 drawing 独立结构中）。若需覆盖，属新功能而非 bug。
 - .venv、.kilo/、规划草稿文件（task_plan.md/findings.md/progress.md）不应提交（见 .gitignore）。

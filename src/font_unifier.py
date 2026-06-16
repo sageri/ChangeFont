@@ -1,5 +1,6 @@
 import sys
 import os
+import logging
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -14,6 +15,9 @@ from openpyxl import load_workbook
 from pptx import Presentation
 from pptx.oxml.ns import qn as pptx_qn
 from lxml import etree
+
+
+logger = logging.getLogger(__name__)
 
 
 # --- Font helpers (handle East Asian / complex scripts) ---
@@ -38,6 +42,7 @@ def _set_docx_run_font(run, font_name):
 
 def _set_pptx_run_font(run, font_name):
     """PowerPoint: set latin + eastAsian + complex-script typefaces on a run."""
+    # run.font.name への代入は rPr を確実に生成し、a:latin も設定する
     run.font.name = font_name
     rPr = run.font._rPr
     for tag in ('a:latin', 'a:ea', 'a:cs'):
@@ -63,18 +68,40 @@ def _set_docx_font(paragraphs, font_name):
             _set_docx_run_font(run, font_name)
 
 
-def change_word_font(path, new_font_name):
-    """Changes the font for all text in a .docx file."""
+def _process_docx_table(table, font_name):
+    """Process a table's cells, recursing into nested tables."""
+    for row in table.rows:
+        for cell in row.cells:
+            _set_docx_font(cell.paragraphs, font_name)
+            for nested in getattr(cell, 'tables', ()):
+                _process_docx_table(nested, font_name)
+
+
+def _process_docx_block(block, font_name):
+    """Process a body/header/footer block: paragraphs + tables (incl. nested)."""
+    _set_docx_font(block.paragraphs, font_name)
+    for table in block.tables:
+        _process_docx_table(table, font_name)
+
+
+def change_word_font(path, font_name):
+    """Changes the font for all text in a .docx file.
+
+    Covers body paragraphs/tables (incl. nested tables) and per-section
+    headers/footers (default, first-page, even-page). Drawing text boxes
+    (<w:txbxContent>) are not covered — known limitation.
+    """
     doc = Document(path)
-    _set_docx_font(doc.paragraphs, new_font_name)
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                _set_docx_font(cell.paragraphs, new_font_name)
+    _process_docx_block(doc, font_name)
+    for section in doc.sections:
+        for part in (section.header, section.footer,
+                     section.first_page_header, section.first_page_footer,
+                     section.even_page_header, section.even_page_footer):
+            _process_docx_block(part, font_name)
     return doc
 
 
-def _replace_all_fonts(workbook, new_font_name):
+def _replace_all_fonts(workbook, font_name):
     """Replace the name of every font definition in the workbook.
 
     All cells, named styles and the default (Normal) style reference these
@@ -87,16 +114,19 @@ def _replace_all_fonts(workbook, new_font_name):
     Excel ignores the explicit <name> and renders text with the theme font
     (e.g. the East-Asian minor font), so previously unstyled cells would
     keep showing the old font even after the name was changed.
+
+    注意: workbook._fonts は openpyxl 3.x の非公開 API。依存バージョンは
+    requirements.txt で openpyxl==3.1.5 に固定済み。アップグレード時は再検証が必要。
     """
     for font in workbook._fonts:
-        font.name = new_font_name
+        font.name = font_name
         font.scheme = None
 
 
-def change_excel_font(path, new_font_name):
+def change_excel_font(path, font_name):
     """Changes the font for all cells in a .xlsx file, preserving other style."""
     workbook = load_workbook(path)
-    _replace_all_fonts(workbook, new_font_name)
+    _replace_all_fonts(workbook, font_name)
     return workbook
 
 
@@ -117,35 +147,35 @@ def _process_chart_fonts(chart, font_name):
                     _set_pptx_text_frame_fonts(
                         axis.axis_title.text_frame, font_name)
                 except Exception:
-                    pass
+                    logger.debug("chart axis font failed", exc_info=True)
     except Exception:
-        pass
+        logger.debug("chart font failed", exc_info=True)
 
 
-def change_ppt_font(path, new_font_name):
+def _process_ppt_shape(shape, font_name):
+    """Recursively processes text in a shape, including nested groups."""
+    if getattr(shape, 'has_text_frame', False):
+        _set_pptx_text_frame_fonts(shape.text_frame, font_name)
+    if getattr(shape, 'has_table', False):
+        for row in shape.table.rows:
+            for cell in row.cells:
+                _set_pptx_text_frame_fonts(cell.text_frame, font_name)
+    if getattr(shape, 'has_chart', False):
+        _process_chart_fonts(shape.chart, font_name)
+    if getattr(shape, 'has_group', False):
+        for sub_shape in shape.shapes:
+            _process_ppt_shape(sub_shape, font_name)
+
+
+def change_ppt_font(path, font_name):
     """Changes the font for all text in a .pptx file.
 
     Covers text frames, tables, charts (title/axes) and nested groups.
     """
-
-    def process_shape_text(shape):
-        """Recursively processes text in a shape, including nested groups."""
-        if getattr(shape, 'has_text_frame', False):
-            _set_pptx_text_frame_fonts(shape.text_frame, new_font_name)
-        if getattr(shape, 'has_table', False):
-            for row in shape.table.rows:
-                for cell in row.cells:
-                    _set_pptx_text_frame_fonts(cell.text_frame, new_font_name)
-        if getattr(shape, 'has_chart', False):
-            _process_chart_fonts(shape.chart, new_font_name)
-        if getattr(shape, 'has_group', False):
-            for sub_shape in shape.shapes:
-                process_shape_text(sub_shape)
-
     prs = Presentation(path)
     for slide in prs.slides:
         for shape in slide.shapes:
-            process_shape_text(shape)
+            _process_ppt_shape(shape, font_name)
     return prs
 
 
@@ -197,11 +227,40 @@ class FontProcessingWorker(QThread):
 ACCENT = "#2563EB"
 ACCENT_HOVER = "#1D4ED8"
 ACCENT_PRESSED = "#1E40AF"
+ACCENT_DISABLED = "#94A3B8"
 BG = "#F1F5F9"
 CARD = "#FFFFFF"
+FILE_CARD_BG = "#F8FAFC"
+GHOST_HOVER = "#EFF6FF"
 TEXT = "#0F172A"
 MUTED = "#64748B"
 BORDER = "#E2E8F0"
+
+# type/badge -> (background, foreground)
+BADGE_COLORS = {
+    "docx": ("#DBEAFE", "#1E40AF"),
+    "xlsx": ("#DCFCE7", "#166534"),
+    "pptx": ("#FFEDD5", "#9A3412"),
+}
+# status kind -> (background, foreground)
+STATUS_COLORS = {
+    "success": ("#DCFCE7", "#166534"),
+    "error": ("#FEE2E2", "#991B1B"),
+    "info": ("#DBEAFE", "#1E40AF"),
+}
+
+
+def _badge_qss():
+    return "\n".join(
+        f'QLabel#badge[type="{ext}"] {{ background: {bg}; color: {fg}; }}'
+        for ext, (bg, fg) in BADGE_COLORS.items())
+
+
+def _status_qss():
+    return "\n".join(
+        f'QLabel#statusLabel[kind="{kind}"] {{ background: {bg}; color: {fg}; }}'
+        for kind, (bg, fg) in STATUS_COLORS.items())
+
 
 APP_QSS = f"""
 QMainWindow, QWidget#central {{ background: {BG}; }}
@@ -212,7 +271,7 @@ QFrame#cardFrame {{
     border-radius: 12px;
 }}
 QFrame#fileCard {{
-    background: #F8FAFC;
+    background: {FILE_CARD_BG};
     border: 1px solid {BORDER};
     border-radius: 8px;
 }}
@@ -233,9 +292,7 @@ QLabel#badge {{
     font-size: 9pt;
     font-weight: bold;
 }}
-QLabel#badge[type="docx"] {{ background: #DBEAFE; color: #1E40AF; }}
-QLabel#badge[type="xlsx"] {{ background: #DCFCE7; color: #166534; }}
-QLabel#badge[type="pptx"] {{ background: #FFEDD5; color: #9A3412; }}
+{_badge_qss()}
 
 QPushButton#primary {{
     background: {ACCENT};
@@ -248,7 +305,7 @@ QPushButton#primary {{
 }}
 QPushButton#primary:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton#primary:pressed {{ background: {ACCENT_PRESSED}; }}
-QPushButton#primary:disabled {{ background: #94A3B8; color: #F8FAFC; }}
+QPushButton#primary:disabled {{ background: {ACCENT_DISABLED}; color: {FILE_CARD_BG}; }}
 
 QPushButton#ghost {{
     background: transparent;
@@ -257,7 +314,7 @@ QPushButton#ghost {{
     border-radius: 6px;
     padding: 6px 14px;
 }}
-QPushButton#ghost:hover {{ background: #EFF6FF; }}
+QPushButton#ghost:hover {{ background: {GHOST_HOVER}; }}
 
 QLineEdit, QComboBox {{
     background: {CARD};
@@ -292,9 +349,7 @@ QLabel#statusLabel {{
     padding: 6px 12px;
     font-size: 10pt;
 }}
-QLabel#statusLabel[kind="success"] {{ background: #DCFCE7; color: #166534; }}
-QLabel#statusLabel[kind="error"] {{ background: #FEE2E2; color: #991B1B; }}
-QLabel#statusLabel[kind="info"] {{ background: #DBEAFE; color: #1E40AF; }}
+{_status_qss()}
 """
 
 
@@ -364,9 +419,9 @@ class FontUnifierApp(QMainWindow):
         file_inner.addLayout(file_head)
 
         file_row = QHBoxLayout()
-        self._file_icon = QLabel()
-        self._file_icon.setPixmap(browse_icon.pixmap(20, 20))
-        file_row.addWidget(self._file_icon)
+        file_icon = QLabel()
+        file_icon.setPixmap(browse_icon.pixmap(20, 20))
+        file_row.addWidget(file_icon)
         self.file_entry = QLineEdit()
         self.file_entry.setReadOnly(True)
         self.file_entry.setPlaceholderText("未选择文件")
@@ -383,8 +438,9 @@ class FontUnifierApp(QMainWindow):
         self.font_entry.setEditable(True)
         font_families = QFontDatabase.families()
         self.font_entry.addItems(font_families)
-        if self.font_name in font_families:
-            self.font_entry.setCurrentText(self.font_name)
+        default = self.font_name if self.font_name in font_families else (
+            font_families[0] if font_families else "")
+        self.font_entry.setCurrentText(default)
         # 入力時に前方一致で候補をポップアップ表示（大小区別なし）
         completer = QCompleter(font_families, self)
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
@@ -429,6 +485,12 @@ class FontUnifierApp(QMainWindow):
     def _finish_processing(self):
         self.progress.setVisible(False)
         self.start_button.setEnabled(True)
+
+    def closeEvent(self, event):
+        # 処理中にウィンドウを閉じた場合、スレッド終了を待ってから破棄する
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.wait(5000)
+        event.accept()
 
     def eventFilter(self, obj, event):
         # フォント入力欄のクリックで候補リストを開く（入力時は前方可動で絞り込まれる）

@@ -63,6 +63,68 @@ def test_change_word_font_empty_doc_no_error(tmp_path):
     assert result is not None
 
 
+def test_change_word_font_removes_theme_attributes(tmp_path):
+    """明示フォント設定後、asciiTheme 等の主題参照属性が削除される"""
+    from docx.oxml.ns import qn
+    doc = Document()
+    run = doc.add_paragraph().add_run("ThemeText")
+    rf = run._element.get_or_add_rPr().get_or_add_rFonts()
+    rf.set(qn('w:asciiTheme'), 'minorEastAsia')
+    rf.set(qn('w:eastAsiaTheme'), 'minorEastAsia')
+    rf.set(qn('w:cstheme'), 'minorBidi')
+    path = str(tmp_path / "theme.docx")
+    doc.save(path)
+
+    doc2 = font_unifier.change_word_font(path, TARGET_FONT)
+    rf2 = doc2.paragraphs[0].runs[0]._element.rPr.rFonts
+    assert rf2.get(qn('w:ascii')) == TARGET_FONT
+    assert rf2.get(qn('w:eastAsia')) == TARGET_FONT
+    assert rf2.get(qn('w:asciiTheme')) is None
+    assert rf2.get(qn('w:eastAsiaTheme')) is None
+    assert rf2.get(qn('w:cstheme')) is None
+
+
+def test_change_word_font_covers_header_footer(tmp_path):
+    """ヘッダ/フッタの run フォントも更新される"""
+    doc = Document()
+    doc.add_paragraph().add_run("body")
+    section = doc.sections[0]
+    section.header.paragraphs[0].add_run("header text")
+    section.footer.paragraphs[0].add_run("footer text")
+    # リンク解除して内容を保持
+    section.header.is_linked_to_previous = False
+    section.footer.is_linked_to_previous = False
+    path = str(tmp_path / "hf.docx")
+    doc.save(path)
+
+    doc2 = font_unifier.change_word_font(path, TARGET_FONT)
+    h_run = doc2.sections[0].header.paragraphs[0].runs[0]
+    f_run = doc2.sections[0].footer.paragraphs[0].runs[0]
+    assert h_run.font.name == TARGET_FONT
+    assert f_run.font.name == TARGET_FONT
+
+
+def test_change_word_font_nested_table(tmp_path):
+    """セル内のネストされた表格の run フォントも更新される"""
+    doc = Document()
+    doc.add_paragraph().add_run("body")
+    outer = doc.add_table(rows=1, cols=1)
+    inner = outer.cell(0, 0).add_table(rows=1, cols=1)
+    inner.cell(0, 0).text = "nested cell"
+    path = str(tmp_path / "nested.docx")
+    doc.save(path)
+
+    doc2 = font_unifier.change_word_font(path, TARGET_FONT)
+    nested = doc2.tables[0].cell(0, 0).tables[0]
+    found = False
+    for para in nested.cell(0, 0).paragraphs:
+        for run in para.runs:
+            if run.text.strip():
+                assert run.font.name == TARGET_FONT
+                found = True
+    assert found
+
+
 # ---------------------------------------------------------------------------
 # Excel (.xlsx)
 # ---------------------------------------------------------------------------
@@ -104,6 +166,29 @@ def test_change_excel_font_persists_after_save(tmp_path):
     ws = wb2.active
     assert ws["A1"].font.name == TARGET_FONT
     assert ws["B2"].font.name == TARGET_FONT
+
+
+def test_change_excel_font_clears_scheme_and_default(tmp_path):
+    """全フォント定義の名前が置換され、scheme が全て None になる（多シート不具合の回帰防止）"""
+    path = _make_xlsx(tmp_path / "in.xlsx")
+    wb = font_unifier.change_excel_font(path, TARGET_FONT)
+    fonts = list(wb._fonts)
+    assert fonts, "ワークブックにフォント定義が存在する必要がある"
+    assert all(f.name == TARGET_FONT for f in fonts)
+    assert all(f.scheme is None for f in fonts)
+    # デフォルト(Normal)フォント(index 0)も変更されている
+    assert fonts[0].name == TARGET_FONT
+
+
+def test_change_excel_font_no_scheme_in_styles_xml(tmp_path):
+    """保存後の styles.xml に <scheme> が残らないことを検証"""
+    import zipfile
+    import re
+    path = _make_xlsx(tmp_path / "in.xlsx")
+    out = font_unifier.process_office_file(path, TARGET_FONT)
+    styles = zipfile.ZipFile(out).read("xl/styles.xml").decode("utf-8")
+    assert "scheme" not in styles
+    assert TARGET_FONT in re.findall(r'<name val="([^"]+)"', styles)
 
 
 # ---------------------------------------------------------------------------
