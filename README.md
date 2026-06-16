@@ -57,7 +57,7 @@ python src/font_unifier.py
 4. 处理完成后，查看状态信息和保存路径
 
 ### 支持的文件类型
-- **Word 文档** (.docx)：更改所有段落和表格文本的字体（同时清除主题字体引用）
+- **Word 文档** (.docx)：更改正文、表格（含嵌套）、页眉/页脚文本的字体（同时清除主题字体引用）
 - **Excel 工作簿** (.xlsx)：替换全部字体定义（含默认/Normal 字体）并清除 `scheme`，覆盖所有工作表
 - **PowerPoint 演示文稿** (.pptx)：更改所有幻灯片文本（含表格、图表、嵌套组形状）的字体
 
@@ -136,3 +136,11 @@ ChangeFont/
 - 修复 Excel 多 sheet 字体未生效：遍历全部字体定义并清除 `scheme`，覆盖默认/Normal 字体
 - 修复 Word 主题字体引用残留：清除 `asciiTheme` 等属性
 - 代码简化（`process_office_file` 路径处理、`process_shape_text`、GUI 小方法抽取）
+
+### v1.4.0
+- Word 覆盖扩展：页眉/页脚（默认/首页/偶数页）、嵌套表格（`_process_docx_container` 递归）
+- 稳定性：窗口关闭时等待后台线程结束（`closeEvent`），避免运行中线程被销毁
+- 健壮性：PPT 图表字体异常改为 `logger.debug` 记录而非静默吞掉
+- 可测性：`process_shape_text` 提升为模块级 `_process_ppt_shape`
+- 新增 5 项回归测试（Excel scheme/默认字体、Word 主题属性清除/页眉页脚/嵌套表格）
+- 进一步简化：docx 处理合并为单一递归、QSS 颜色生成去重
