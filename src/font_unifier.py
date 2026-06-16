@@ -68,20 +68,21 @@ def _set_docx_font(paragraphs, font_name):
             _set_docx_run_font(run, font_name)
 
 
+def _process_docx_container(container, font_name):
+    """Process paragraphs + tables of a body/header/footer/cell.
+
+    A cell may itself contain nested tables, so this recurses naturally via
+    _process_docx_table -> _process_docx_container.
+    """
+    _set_docx_font(container.paragraphs, font_name)
+    for table in getattr(container, 'tables', ()):
+        _process_docx_table(table, font_name)
+
+
 def _process_docx_table(table, font_name):
-    """Process a table's cells, recursing into nested tables."""
     for row in table.rows:
         for cell in row.cells:
-            _set_docx_font(cell.paragraphs, font_name)
-            for nested in getattr(cell, 'tables', ()):
-                _process_docx_table(nested, font_name)
-
-
-def _process_docx_block(block, font_name):
-    """Process a body/header/footer block: paragraphs + tables (incl. nested)."""
-    _set_docx_font(block.paragraphs, font_name)
-    for table in block.tables:
-        _process_docx_table(table, font_name)
+            _process_docx_container(cell, font_name)
 
 
 def change_word_font(path, font_name):
@@ -92,12 +93,12 @@ def change_word_font(path, font_name):
     (<w:txbxContent>) are not covered — known limitation.
     """
     doc = Document(path)
-    _process_docx_block(doc, font_name)
+    _process_docx_container(doc, font_name)
     for section in doc.sections:
         for part in (section.header, section.footer,
                      section.first_page_header, section.first_page_footer,
                      section.even_page_header, section.even_page_footer):
-            _process_docx_block(part, font_name)
+            _process_docx_container(part, font_name)
     return doc
 
 
@@ -250,16 +251,11 @@ STATUS_COLORS = {
 }
 
 
-def _badge_qss():
+def _color_qss(selector, prop, colors):
+    """Render QSS rules: selector[prop="key"] { background; color }."""
     return "\n".join(
-        f'QLabel#badge[type="{ext}"] {{ background: {bg}; color: {fg}; }}'
-        for ext, (bg, fg) in BADGE_COLORS.items())
-
-
-def _status_qss():
-    return "\n".join(
-        f'QLabel#statusLabel[kind="{kind}"] {{ background: {bg}; color: {fg}; }}'
-        for kind, (bg, fg) in STATUS_COLORS.items())
+        f'{selector}[{prop}="{key}"] {{ background: {bg}; color: {fg}; }}'
+        for key, (bg, fg) in colors.items())
 
 
 APP_QSS = f"""
@@ -292,7 +288,7 @@ QLabel#badge {{
     font-size: 9pt;
     font-weight: bold;
 }}
-{_badge_qss()}
+{_color_qss('QLabel#badge', 'type', BADGE_COLORS)}
 
 QPushButton#primary {{
     background: {ACCENT};
@@ -349,7 +345,7 @@ QLabel#statusLabel {{
     padding: 6px 12px;
     font-size: 10pt;
 }}
-{_status_qss()}
+{_color_qss('QLabel#statusLabel', 'kind', STATUS_COLORS)}
 """
 
 
