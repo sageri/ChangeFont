@@ -130,15 +130,15 @@ def change_ppt_font(path, new_font_name):
 
     def process_shape_text(shape):
         """Recursively processes text in a shape, including nested groups."""
-        if getattr(shape, 'has_text_frame', False) and shape.has_text_frame:
+        if getattr(shape, 'has_text_frame', False):
             _set_pptx_text_frame_fonts(shape.text_frame, new_font_name)
-        if getattr(shape, 'has_table', False) and shape.has_table:
+        if getattr(shape, 'has_table', False):
             for row in shape.table.rows:
                 for cell in row.cells:
                     _set_pptx_text_frame_fonts(cell.text_frame, new_font_name)
-        if getattr(shape, 'has_chart', False) and shape.has_chart:
+        if getattr(shape, 'has_chart', False):
             _process_chart_fonts(shape.chart, new_font_name)
-        if getattr(shape, 'has_group', False) and shape.has_group:
+        if getattr(shape, 'has_group', False):
             for sub_shape in shape.shapes:
                 process_shape_text(sub_shape)
 
@@ -163,9 +163,8 @@ def process_office_file(path, font_name):
     Returns the output path. Raises ValueError on unsupported extensions.
     Case-insensitive on the extension.
     """
-    file_dir, file_name = os.path.split(path)
-    name, ext = os.path.splitext(file_name)
-    output_path = os.path.join(file_dir, f"{name}_modified{ext}")
+    root, ext = os.path.splitext(path)
+    output_path = f"{root}_modified{ext}"
 
     changer = _FONT_CHANGERS.get(ext.lower())
     if changer is None:
@@ -352,10 +351,7 @@ class FontUnifierApp(QMainWindow):
         file_inner.setSpacing(8)
 
         file_head = QHBoxLayout()
-        file_head_label = QLabel("选择文件")
-        file_head_label.setStyleSheet(
-            f"color: {MUTED}; font-weight: bold;")
-        file_head.addWidget(file_head_label)
+        file_head.addWidget(self._muted_label("选择文件"))
         file_head.addStretch()
         browse_button = QPushButton("Browse…")
         browse_button.setObjectName("ghost")
@@ -380,8 +376,7 @@ class FontUnifierApp(QMainWindow):
 
         # Font row
         font_row = QHBoxLayout()
-        font_label = QLabel("目标字体")
-        font_label.setStyleSheet(f"color: {MUTED}; font-weight: bold;")
+        font_label = self._muted_label("目标字体")
         font_label.setFixedWidth(80)
         font_row.addWidget(font_label)
         self.font_entry = QComboBox()
@@ -425,6 +420,15 @@ class FontUnifierApp(QMainWindow):
                          alignment=Qt.AlignmentFlag.AlignCenter)
 
         layout.addStretch()
+
+    def _muted_label(self, text):
+        label = QLabel(text)
+        label.setStyleSheet(f"color: {MUTED}; font-weight: bold;")
+        return label
+
+    def _finish_processing(self):
+        self.progress.setVisible(False)
+        self.start_button.setEnabled(True)
 
     def eventFilter(self, obj, event):
         # フォント入力欄のクリックで候補リストを開く（入力時は前方可動で絞り込まれる）
@@ -480,16 +484,14 @@ class FontUnifierApp(QMainWindow):
         self._worker.start()
 
     def _on_processing_finished(self, output_path):
-        self.progress.setVisible(False)
-        self.start_button.setEnabled(True)
+        self._finish_processing()
         self._set_status(f"Success! Saved to {output_path}", "success")
         QMessageBox.information(
             self, "Success",
             "File processed successfully and saved as: " + output_path)
 
     def _on_processing_error(self, message):
-        self.progress.setVisible(False)
-        self.start_button.setEnabled(True)
+        self._finish_processing()
         self._set_status("An error occurred.", "error")
         QMessageBox.critical(
             self, "Error",

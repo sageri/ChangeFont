@@ -55,10 +55,15 @@ ChangeFont/
 ## 架构要点
 
 - **核心函数**（纯函数，易测）：`change_word_font` / `change_excel_font` / `change_ppt_font`，输入 `(path, font_name)`，返回内存对象，不负责保存。
-- **调度函数**：`process_office_file(path, font_name)` 按扩展名（大小写不敏感）分发并保存为 `原名_modified.ext`。
-- **字体属性**：Word 写入 `w:ascii/hAnsi/eastAsia/cs`，PowerPoint 写入 `a:latin/ea/cs`，确保中日文字符生效；Excel 用 `cell.font.copy(name=...)` 仅替换字体名、保留其它样式。
+- **调度函数**：`process_office_file(path, font_name)` 用 `os.path.splitext` 切分，按扩展名（大小写不敏感）分发并保存为 `原名_modified.ext`。
+- **字体属性**：Word 写入 `w:ascii/hAnsi/eastAsia/cs`，PowerPoint 写入 `a:latin/ea/cs`，确保中日文字符生效。
+- **主题字体覆盖（重要）**：仅改字体名不够，必须清除主题引用，否则 Excel/Word 仍按主题字体渲染：
+  - Excel：`_replace_all_fonts` 遍历 `workbook._fonts`，替换每个字体的 `name` 并把 `scheme` 置 `None`（`scheme` 与 `name` 共存时 Excel 会忽略 `name`、改用主题东亚字体，导致多 sheet 未改）。此法一次覆盖所有单元格、命名样式与默认（Normal）字体，且不再触发 `Font.copy()` 的 DeprecationWarning。
+  - Word：`_set_docx_run_font` 设显式名后 `attrib.pop` 掉 `w:asciiTheme/hAnsiTheme/eastAsiaTheme/cstheme`。
+  - PowerPoint：`_set_pptx_run_font` 直接 `set('typeface', ...)` 覆盖现有 `a:latin/ea/cs`，主题引用（`+mn-lt` 等）一并被替换，无需额外处理。
 - **后台处理**：`FontProcessingWorker(QThread)` 通过信号 `finished`/`error` 回主线程更新 UI，避免大文件卡死。
 - **图表兜底**：`_process_chart_fonts` 对单形状异常 try/except，单一图表异常不得拖垮整个文件。
+- **GUI**：`FontUnifierApp(QMainWindow)`。全局 QSS（`APP_QSS` 常量）挂在 `QApplication` 上统一样式；卡片布局、靛蓝强调色、busy `QProgressBar`、`_set_status(text, kind)` 用动态属性 `kind` + `unpolish/polish` 切换状态色块。字体框为可编辑 `QComboBox`，配合 `QCompleter`（大小写不敏感前缀匹配）与 `eventFilter`（点击输入框即弹列表），行为对标 Excel。字体列表来自 `QFontDatabase.families()`。
 
 ## 代码规范
 
@@ -71,5 +76,5 @@ ChangeFont/
 
 - 输出文件命名为 `原名_modified.扩展名`，**绝不覆盖原文件**。
 - python-pptx 没有 `chart.x_axis/y_axis`，应使用 `category_axis/value_axis`；`series.data_labels` 不可逐点迭代。
-- `openpyxl` 的 `Font.copy()` 会触发 DeprecationWarning（功能正常），属已知无害警告。
+- 验证字体是否真生效，不能只看 openpyxl/python-docx 的再読込，必须直接检查 `xl/styles.xml`、`word/document.xml`、`xl/theme/theme1.xml`（Excel 的 `<scheme>` 与 Word 的 `asciiTheme` 等主题引用是常见陷阱）。
 - .venv、.kilo/、规划草稿文件（task_plan.md/findings.md/progress.md）不应提交（见 .gitignore）。
